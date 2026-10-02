@@ -16,4 +16,19 @@ if [ -n "${CRON_SECRET}" ]; then
   tick /api/meeting-briefs 900 &
   tick /api/watch/all 21600 &
 fi
+# Fetch Gmail notifications over an outbound connection (see bos/README.md).
+# The fetcher exits quietly when its settings are absent; otherwise keep it alive.
+if [ -n "${GOOGLE_PUBSUB_PULL_SUBSCRIPTION}" ] && [ -n "${GOOGLE_PUBSUB_PULL_KEY}" ]; then
+  (
+    sleep 60
+    while true; do
+      node /app/bos-pull.mjs
+      code=$?
+      # 78 = a setting is wrong; retrying cannot fix it, a redeploy with corrected settings will.
+      if [ "$code" -eq 78 ]; then echo "[pull] fetcher is off until its settings are corrected"; break; fi
+      echo "[pull] fetcher stopped (exit $code); restarting"
+      sleep 15
+    done
+  ) &
+fi
 exec /app/docker/scripts/start.sh

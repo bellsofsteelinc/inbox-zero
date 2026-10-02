@@ -3,6 +3,7 @@
 # `cron` service inside the same container.
 FROM ghcr.io/elie222/inbox-zero:latest
 COPY bos/start.sh /app/bos-start.sh
+COPY bos/pull.mjs /app/bos-pull.mjs
 USER root
 RUN chmod +x /app/bos-start.sh
 EXPOSE 3000
