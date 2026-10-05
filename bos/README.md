@@ -5,9 +5,30 @@ BOS-specific files. Everything else in this repository is upstream
 
 | File | What it does |
 |---|---|
-| `../Dockerfile` | Starts from the upstream prebuilt image and adds the two files below. |
+| `../Dockerfile` | Starts from the upstream prebuilt image and adds the files below. |
 | `start.sh` | Runs the scheduled-job loops and the Gmail fetcher, then the app. |
 | `pull.mjs` | Fetches Gmail notifications from Google instead of receiving them. |
+| `redis-http.mjs` | Serves the platform's private Redis over the Upstash-style HTTP protocol the app uses. |
+
+## Redis without Upstash
+
+Inbox Zero talks to Redis through the `@upstash/redis` client, which speaks HTTP.
+BOS Deploy's "Add Redis" option supplies a plain Redis as `REDIS_URL`. When that is
+set and `REDIS_HTTP_URL` is not, `start.sh` runs `redis-http.mjs` on the container's
+loopback address and points the app at it (`REDIS_HTTP_URL=http://127.0.0.1:8079`,
+with a token generated at start). Nothing to configure, nothing reachable from
+outside the container. `REDIS_URL` is also used directly for subscriptions and, with
+`QUEUE_BACKEND=bullmq`, for queues.
+
+It covers what the client sends: single commands, `/pipeline`, `/multi-exec`, and
+base64-encoded replies. Commands that change a connection's state (`SUBSCRIBE`,
+`MULTI`, `SELECT`, `MONITOR` and similar) are refused, because every request shares
+one connection; the app uses `REDIS_URL` directly for subscriptions. Set `REDIS_HTTP_URL` and `REDIS_HTTP_TOKEN` yourself to use
+Upstash or another HTTP Redis instead; the front then stays off.
+
+The platform's Redis is memory-only: a restart of the Redis service empties it.
+Inbox Zero keeps locks, catch-up markers and queued jobs there, so a queued action
+can be lost on a restart; mail itself lives in Gmail.
 
 ## Why Gmail notifications are fetched
 
@@ -58,7 +79,7 @@ Google redelivers those.
 
 ## Tests
 
-    node --test bos/pull.test.mjs
+    node --test bos/pull.test.mjs bos/redis-http.test.mjs
 
 ## Upgrading
 
